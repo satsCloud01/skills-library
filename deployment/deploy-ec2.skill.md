@@ -80,6 +80,41 @@ for app in "${APPS[@]}"; do
 done
 ```
 
+## Post-Deploy: Update Solution Registry Tour
+
+After deploying any new app or agent to production, update the "Take the Tour" in `deployed-apps.html`:
+
+1. Open `/Users/Sats/Documents/TechnicalPlayGround/CodexFolder/deployed-apps.html`
+2. Find `var TOUR_STEPS = [` in the JavaScript section
+3. Add a new tour step object in the appropriate category section (Data & Analytics, AI & Agents, Architecture & DevOps, Productivity, Data Quality Agents, or Learning Academy):
+   ```javascript
+   {
+     icon: 'EMOJI', title: 'App Name',
+     subtitle: 'Category · Short tagline',
+     gradient: 'linear-gradient(135deg,#COLOR1,#COLOR2)', url: 'https://SUBDOMAIN.satszone.link',
+     desc: 'Full description of the app...',
+     features: [
+       'Feature highlight 1',
+       'Feature highlight 2',
+       'Feature highlight 3',
+       'Test count · Key differentiator'
+     ]
+   },
+   ```
+4. Update the **Welcome step** (first entry) — update subtitle counts and the 6-category features list
+5. Update the **Finale step** (last entry) — update title count, subtitle, desc, and features
+6. Copy the updated file to the solution-registry repo and push:
+   ```bash
+   cp deployed-apps.html /Users/Sats/Documents/TechnicalPlayGround/CodexFolder/solution-registry/index.html
+   cd /Users/Sats/Documents/TechnicalPlayGround/CodexFolder/solution-registry
+   git add index.html && git commit -m "feat: add APP_NAME to tour" && git push origin main
+   ```
+7. Deploy to S3 + invalidate CloudFront:
+   ```bash
+   aws s3 cp deployed-apps.html s3://my-solution-registry.satszone.link/index.html --content-type "text/html"
+   aws cloudfront create-invalidation --distribution-id E2R00426B8QGNB --paths "/*"
+   ```
+
 ## Rules
 - Always pull before build — never build stale code
 - Health check after every deploy — don't assume success

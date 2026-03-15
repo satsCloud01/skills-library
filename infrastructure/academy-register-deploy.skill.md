@@ -182,18 +182,48 @@ aws s3 cp deployed-apps.html s3://my-solution-registry.satszone.link/index.html 
 aws cloudfront create-invalidation --distribution-id E2R00426B8QGNB --paths "/*"
 ```
 
-## Step 5: End-to-End Verification
+## Step 5: Update Solution Registry Tour
+
+The "Take the Tour" must include every new academy. Add a tour step in the `/* ── Learning Academy ── */` section of `TOUR_STEPS`:
+
+```javascript
+{
+  icon: 'EMOJI', title: 'Academy Name',
+  subtitle: 'Learning Academy \u00b7 Topic tagline',
+  gradient: 'linear-gradient(135deg,#COLOR1,#COLOR2)', url: null,
+  desc: 'Description of the academy content...',
+  features: [
+    'Lesson count and categories',
+    'Interactive features (simulators, playground, etc.)',
+    'Quiz details and scoring',
+    'On-demand deploy: click Deploy Now to spin up a live instance for 30 minutes'
+  ]
+},
+```
+
+Then update the **Welcome step** (first entry) and **Finale step** (last entry) counts to reflect the new total. Deploy to S3 and push to GitHub:
+
+```bash
+cp deployed-apps.html /Users/Sats/Documents/TechnicalPlayGround/CodexFolder/solution-registry/index.html
+cd /Users/Sats/Documents/TechnicalPlayGround/CodexFolder/solution-registry
+git add index.html && git commit -m "feat: add ACADEMY_NAME to tour" && git push origin main
+aws s3 cp /Users/Sats/Documents/TechnicalPlayGround/CodexFolder/deployed-apps.html s3://my-solution-registry.satszone.link/index.html --content-type "text/html"
+aws cloudfront create-invalidation --distribution-id E2R00426B8QGNB --paths "/*"
+```
+
+## Step 6: End-to-End Verification
 
 1. Open `https://my-solution-registry.satszone.link`
-2. Navigate to **Learning Academy** section
-3. Click **Deploy Now** on the new card
-4. Verify the 4-step deploy modal completes:
+2. Click **Take the Tour** — verify the new academy step appears in the correct position
+3. Navigate to **Learning Academy** section
+4. Click **Deploy Now** on the new card
+5. Verify the 4-step deploy modal completes:
    - Step 1: EC2 provisioned
    - Step 2: Docker image pulled
    - Step 3: Container started
    - Step 4: Health check passes
-5. Click **Open App** — verify the app loads
-6. Click **Kill** to terminate the instance
+6. Click **Open App** — verify the app loads
+7. Click **Kill** to terminate the instance
 
 ## Academy App Conventions
 
@@ -231,5 +261,9 @@ aws cloudfront create-invalidation --distribution-id E2R00426B8QGNB --paths "/*"
 - [ ] Test instance launched and terminated
 - [ ] On-demand card added to Solution Registry HTML
 - [ ] `CARD_PREFIX` mapping added in JavaScript
+- [ ] Tour step added to `TOUR_STEPS` in Learning Academy section
+- [ ] Welcome and Finale tour steps updated with new counts
 - [ ] Registry deployed to S3 + CloudFront invalidated
+- [ ] Registry pushed to GitHub (satsCloud01/solution-registry)
 - [ ] End-to-end deploy test from registry UI
+- [ ] Tour verified (new step appears in correct position)
