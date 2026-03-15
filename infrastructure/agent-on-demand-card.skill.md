@@ -215,3 +215,28 @@ var FUN_STAGES = [
 3. One deploy per user session — must kill before deploying another
 4. TTL auto-destroys after 30 minutes
 5. API keys (BYOK) stored in browser localStorage only, never server-side
+
+## MANDATORY: Update Solution Registry Tour
+
+After adding any new on-demand agent card, you **must** also add a matching tour step to the `TOUR_STEPS` array in `deployed-apps.html`. The tour must always reflect the complete portfolio.
+
+1. Open `/Users/Sats/Documents/TechnicalPlayGround/CodexFolder/deployed-apps.html`
+2. Find `var TOUR_STEPS = [` and add a step in the correct category section:
+   ```javascript
+   {
+     icon: 'EMOJI', title: 'Agent Name',
+     subtitle: 'Category · Short tagline',
+     gradient: 'linear-gradient(135deg,#COLOR1,#COLOR2)', url: null,
+     desc: 'Description...',
+     features: ['Feature 1', 'Feature 2', 'Feature 3', 'On-demand deploy: click Deploy Now to spin up a live instance for 30 minutes']
+   },
+   ```
+3. Update the **Welcome step** (first) and **Finale step** (last) with new counts
+4. Copy to solution-registry repo, push to GitHub, deploy to S3, invalidate CloudFront:
+   ```bash
+   cp deployed-apps.html /Users/Sats/Documents/TechnicalPlayGround/CodexFolder/solution-registry/index.html
+   cd /Users/Sats/Documents/TechnicalPlayGround/CodexFolder/solution-registry
+   git add index.html && git commit -m "feat: add AGENT_NAME to tour" && git push origin main
+   aws s3 cp /Users/Sats/Documents/TechnicalPlayGround/CodexFolder/deployed-apps.html s3://my-solution-registry.satszone.link/index.html --content-type "text/html"
+   aws cloudfront create-invalidation --distribution-id E2R00426B8QGNB --paths "/*"
+   ```

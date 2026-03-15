@@ -54,6 +54,15 @@ aws cloudfront create-invalidation --distribution-id EXXXXXXXX --paths "/*"
 - SSL: ACM certificate (us-east-1 for CloudFront)
 - Price class: Use Only NA and Europe (cheapest)
 
+## Solution Registry Specifics
+
+The Solution Registry (`my-solution-registry.satszone.link`) is the main portfolio page. When deploying updates to it:
+- Source file: `/Users/Sats/Documents/TechnicalPlayGround/CodexFolder/deployed-apps.html`
+- S3 bucket: `s3://my-solution-registry.satszone.link/index.html`
+- CloudFront dist: `E2R00426B8QGNB`
+- GitHub repo: `satsCloud01/solution-registry` (copy to `solution-registry/index.html` and push)
+- **IMPORTANT**: If any new app, agent, or academy was added, the `TOUR_STEPS` array must include a matching tour step with updated Welcome/Finale counts
+
 ## Rules
 - Always invalidate after deploy — CloudFront caches aggressively
 - Set short cache on `index.html` (5 min), long cache on assets (1 year)

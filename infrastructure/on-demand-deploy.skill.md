@@ -431,6 +431,33 @@ All agent instances are tagged with `ManagedBy=agent-launcher`. This tag is the 
    },
    ```
 3. Update Lambda: `zip -j /tmp/launcher.zip launcher.py && aws lambda update-function-code --function-name agent-launcher --zip-file fileb:///tmp/launcher.zip`
+4. **Update the Solution Registry tour** — see "Post-Deploy: Update Solution Registry Tour" below
+
+## Post-Deploy: Update Solution Registry Tour
+
+**MANDATORY** after every new app, agent, or academy deployment. The "Take the Tour" on the Solution Registry must always reflect the complete portfolio.
+
+1. Open `/Users/Sats/Documents/TechnicalPlayGround/CodexFolder/deployed-apps.html`
+2. Find `var TOUR_STEPS = [` and add a new step in the correct category section:
+   ```javascript
+   {
+     icon: 'EMOJI', title: 'App Name',
+     subtitle: 'Category · Short tagline',
+     gradient: 'linear-gradient(135deg,#COLOR1,#COLOR2)', url: 'https://SUBDOMAIN.satszone.link',
+     desc: 'Full description...',
+     features: ['Feature 1', 'Feature 2', 'Feature 3', 'Tests · Key differentiator']
+   },
+   ```
+3. Update the **Welcome step** (first) — counts and 6-category breakdown
+4. Update the **Finale step** (last) — total count, subtitle, and features
+5. Push and deploy:
+   ```bash
+   cp deployed-apps.html /Users/Sats/Documents/TechnicalPlayGround/CodexFolder/solution-registry/index.html
+   cd /Users/Sats/Documents/TechnicalPlayGround/CodexFolder/solution-registry
+   git add index.html && git commit -m "feat: add APP_NAME to tour" && git push origin main
+   aws s3 cp /Users/Sats/Documents/TechnicalPlayGround/CodexFolder/deployed-apps.html s3://my-solution-registry.satszone.link/index.html --content-type "text/html"
+   aws cloudfront create-invalidation --distribution-id E2R00426B8QGNB --paths "/*"
+   ```
 
 ## API Reference
 

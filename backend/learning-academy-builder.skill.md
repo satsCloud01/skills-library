@@ -129,6 +129,20 @@ Assign unique ports in the Sats port range:
 - Frontend: 5190+ (e.g., 5190, 5191, 5192, 5193)
 - Docker: backend_port + 1
 
+## MANDATORY: Update Solution Registry Tour on Deploy
+
+Every new academy **must** be added to the `TOUR_STEPS` array in `/Users/Sats/Documents/TechnicalPlayGround/CodexFolder/deployed-apps.html`. Add a tour step in the `/* ── Learning Academy ── */` section, update Welcome (first) and Finale (last) step counts, then:
+
+```bash
+cp deployed-apps.html /Users/Sats/Documents/TechnicalPlayGround/CodexFolder/solution-registry/index.html
+cd /Users/Sats/Documents/TechnicalPlayGround/CodexFolder/solution-registry
+git add index.html && git commit -m "feat: add ACADEMY_NAME to tour" && git push origin main
+aws s3 cp /Users/Sats/Documents/TechnicalPlayGround/CodexFolder/deployed-apps.html s3://my-solution-registry.satszone.link/index.html --content-type "text/html"
+aws cloudfront create-invalidation --distribution-id E2R00426B8QGNB --paths "/*"
+```
+
+See `academy-register-deploy` skill for full tour step format.
+
 ## Content Rendering
 
 The Learn page should render all content types from each lesson:

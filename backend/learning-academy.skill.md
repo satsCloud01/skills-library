@@ -831,7 +831,38 @@ After the app is built and tested, use the `academy-register-deploy` skill to:
 1. Build and push Docker image to ECR
 2. Register in the agent-launcher Lambda
 3. Add on-demand card to Solution Registry
-4. Verify end-to-end deploy
+4. **Add tour step to Solution Registry tour** (MANDATORY — see below)
+5. Verify end-to-end deploy
+
+### MANDATORY: Update Solution Registry Tour
+
+Every new academy **must** be added to the `TOUR_STEPS` array in `deployed-apps.html`. The tour must always reflect the complete portfolio.
+
+1. Open `/Users/Sats/Documents/TechnicalPlayGround/CodexFolder/deployed-apps.html`
+2. Find `/* ── Learning Academy ── */` in `TOUR_STEPS` and add:
+   ```javascript
+   {
+     icon: 'EMOJI', title: 'Academy Name',
+     subtitle: 'Learning Academy \u00b7 Topic tagline',
+     gradient: 'linear-gradient(135deg,#COLOR1,#COLOR2)', url: null,
+     desc: 'Description of content...',
+     features: [
+       'Lesson count and categories',
+       'Interactive features (simulators, playground, etc.)',
+       'Quiz details and scoring',
+       'On-demand deploy: click Deploy Now to spin up a live instance for 30 minutes'
+     ]
+   },
+   ```
+3. Update the **Welcome step** (first) and **Finale step** (last) with new counts
+4. Push and deploy:
+   ```bash
+   cp deployed-apps.html /Users/Sats/Documents/TechnicalPlayGround/CodexFolder/solution-registry/index.html
+   cd /Users/Sats/Documents/TechnicalPlayGround/CodexFolder/solution-registry
+   git add index.html && git commit -m "feat: add ACADEMY_NAME to tour" && git push origin main
+   aws s3 cp /Users/Sats/Documents/TechnicalPlayGround/CodexFolder/deployed-apps.html s3://my-solution-registry.satszone.link/index.html --content-type "text/html"
+   aws cloudfront create-invalidation --distribution-id E2R00426B8QGNB --paths "/*"
+   ```
 
 ---
 

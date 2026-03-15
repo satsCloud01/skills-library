@@ -106,6 +106,15 @@ sudo docker system prune -af
 | App 3 | 8000 | 8012 |
 | Streamlit apps | 8501 | 801x |
 
+## Post-Deploy: Update Solution Registry Tour
+
+After adding any new app to Docker Compose production, update the "Take the Tour" in `deployed-apps.html`:
+1. Add a tour step to `TOUR_STEPS` in the correct category section
+2. Update Welcome (first) and Finale (last) step counts
+3. Copy to `solution-registry/index.html`, push to GitHub, deploy to S3, invalidate CloudFront (dist `E2R00426B8QGNB`)
+
+See `deploy-ec2` or `academy-register-deploy` skill for full tour step format and deploy commands.
+
 ## Rules
 - `restart: unless-stopped` — survives reboots but respects manual stops
 - Health checks on every service — enables `docker compose ps` monitoring
