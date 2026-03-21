@@ -7,7 +7,7 @@ Reusable skill definitions for AI agents. Each skill encodes best practices from
 | Folder | Skills | Purpose |
 |--------|--------|---------|
 | `ui/` | React component, page, styling, accessibility, tour | Frontend development |
-| `backend/` | FastAPI router, models, schemas, services, auth, seed | Backend development |
+| `backend/` | FastAPI router, models, schemas, services, auth, seed, pipeline orchestration, agent evaluation, cron scheduling, human review queue | Backend development |
 | `integrations/` | API client, Claude AI, S3/AWS, WebSocket, OAuth | External system integration |
 | `infrastructure/` | Docker, Nginx, EC2, Route53, CI/CD | Infrastructure & DevOps |
 | `testing/` | Unit, E2E, contract, performance, accessibility | All testing disciplines |
