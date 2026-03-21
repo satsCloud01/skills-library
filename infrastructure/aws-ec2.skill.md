@@ -74,18 +74,35 @@ WantedBy=multi-user.target
 ## Cost Optimization (Lambda Scheduler)
 
 ```python
-# Stop at 10PM CST (4AM UTC), Start at 7AM CST (1PM UTC) Mon-Fri
-# EventBridge rules → Lambda functions
-import boto3
+# Stop at 10PM CST (4AM UTC), Start at 7AM CST (1PM UTC) daily
+# EventBridge rules: EC2-Stop-Night (cron 0 4 * * ? *) → EC2-Stop-Consolidated
+#                    EC2-Start-Morning (cron 0 13 * * ? *) → EC2-Start-Consolidated
+# Env vars: ACTION=start|stop, INSTANCE_IDS=comma-separated list
+import boto3, os
 
-def stop_handler(event, context):
-    boto3.client('ec2', region_name='us-east-1').stop_instances(
-        InstanceIds=['i-0123456789abcdef0'])
+ec2 = boto3.client('ec2', region_name='us-east-1')
 
-def start_handler(event, context):
-    boto3.client('ec2', region_name='us-east-1').start_instances(
-        InstanceIds=['i-0123456789abcdef0'])
+def _get_ids():
+    ids = os.environ.get('INSTANCE_IDS', '')
+    if ids:
+        return [i.strip() for i in ids.split(',') if i.strip()]
+    single = os.environ.get('INSTANCE_ID', '')
+    return [single] if single else []
+
+def handler(event, context):
+    action = event.get('action', os.environ.get('ACTION', ''))
+    ids = _get_ids()
+    if not ids:
+        return {'statusCode': 400, 'error': 'No instance IDs configured'}
+    if action == 'stop':
+        ec2.stop_instances(InstanceIds=ids)
+    elif action == 'start':
+        ec2.start_instances(InstanceIds=ids)
+    return {'statusCode': 200, 'action': action, 'instances': ids}
 ```
+
+> **Adding new instances:** Update the `INSTANCE_IDS` env var on both Lambda functions.
+> The solution registry shows a maintenance banner during downtime (4–13 UTC) using visitor's local time.
 
 ## Deployment Workflow
 
