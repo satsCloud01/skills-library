@@ -1,10 +1,10 @@
 ---
 name: nginx-room-key-gate
-description: "Deploy Nginx auth_request room key gate to EC2 instances protecting satszone.link apps with cookie-based authentication"
+description: "Deploy Nginx auth_request room key gate to EC2 or GCP instances protecting satszone.link apps with cookie-based authentication"
 category: infrastructure
 difficulty: intermediate
-tags: [nginx, auth, security, gate, room-key, ec2, deployment]
-stack: [nginx, python-3.12, systemd, aws-ec2, route53]
+tags: [nginx, auth, security, gate, room-key, ec2, gcp, deployment]
+stack: [nginx, python-3.12, systemd, aws-ec2, gcp, route53]
 ---
 
 # Nginx Room Key Gate Deployment
@@ -19,13 +19,19 @@ You are an infrastructure engineer deploying the SatsZone room key gate. This ga
 - **Cache**: Valid keys cached 5 min in-memory
 - **Gate HTML**: Served from `/var/www/gate/gate-auth.html` (NEVER `/home/ubuntu/` — www-data can't access home dirs)
 
-## EC2 Instances
+## Instances
 
+### AWS EC2
 | Instance | IP | SSH Key | Apps |
 |----------|-----|---------|------|
 | consolidated-apps | 3.82.56.250 | `~/.ssh/consolidated-apps-key.pem` | 15 apps (main) |
 | Consolidated Apps 2 | 100.53.181.201 | `~/.ssh/sentinel-ai-key.pem` | sentinel-ai, agentkraft, cip, agentsubstrate |
 | agentsubstrate (dedicated) | 3.88.105.213 | `~/.ssh/sentinel-ai-key.pem` | agentsubstrate |
+
+### GCP
+| Instance | IP | Zone | Apps |
+|----------|-----|------|------|
+| agentsubstrate-gcp | 34.73.223.187 | us-east1-d | agentsubstrate (GCP copy) |
 
 ## Step 1: Create Gate HTML File
 
@@ -194,12 +200,12 @@ location = /_gate {
 }
 ```
 
-## Step 5: Deploy to EC2
+## Step 5: Deploy to Instance (EC2 or GCP)
 
-For each EC2 instance:
+For each instance:
 
 ```bash
-# Upload files
+# Upload files (EC2: use scp -i $KEY ubuntu@$IP, GCP: use gcloud compute scp)
 scp -i $KEY /tmp/gate-auth.html /tmp/gate-auth-server.py /tmp/gate-auth-snippet.conf /tmp/gate-auth.service ubuntu@$IP:/tmp/
 
 # Install on server
@@ -313,6 +319,82 @@ Same as Pattern B but add to `location /`:
         proxy_set_header Connection "upgrade";
 ```
 
+### Pattern E — GCP / Non-EC2 Docker apps (with gate.js stripping + no-cache):
+
+**Use this for ANY app deployed outside the EC2 consolidated instance (GCP, other clouds).**
+Apps embed a client-side `gate.js` that creates a SECOND gate overlay. On EC2 this works because
+gate.js and the Nginx gate share localStorage/cookies. On non-EC2 hosts, only the Nginx gate should
+be active — gate.js must be stripped to avoid a duplicate broken overlay.
+
+**CRITICAL differences from Pattern B:**
+1. `sub_filter` strips the `gate.js` script URL to prevent the client-side gate overlay
+2. `proxy_set_header Accept-Encoding ""` disables gzip so `sub_filter` can match text
+3. `Cache-Control: no-store` prevents browser from caching gate page and serving stale 304s after auth passes
+4. Must add the new subdomain to API Gateway CORS AllowOrigins (see GCP Checklist below)
+
+```nginx
+server {
+    server_name APP.satszone.link;
+    include /etc/nginx/snippets/gate-auth.conf;
+    error_page 401 =200 /_gate;
+
+    # CRITICAL: Prevent browser caching gate page vs app page (causes 304 stale responses)
+    add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+    add_header Pragma "no-cache" always;
+    expires 0;
+
+    client_max_body_size 50M;
+
+    location / {
+        auth_request /_auth;
+        proxy_pass http://127.0.0.1:PORT;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 300s;
+
+        # CRITICAL: Disable compression so sub_filter can match
+        proxy_set_header Accept-Encoding "";
+
+        # CRITICAL: Strip client-side gate.js — Nginx auth_request handles auth server-side
+        # Without this, the app shows TWO gate overlays (Nginx + gate.js) and gate.js fails
+        # because it uses localStorage sessions, not the sz_room_key cookie
+        sub_filter_once on;
+        sub_filter "my-solution-registry.satszone.link/gate.js" "about:blank";
+    }
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:PORT;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Allow caching for immutable static assets (JS/CSS bundles with hashed names)
+    location /assets/ {
+        auth_request /_auth;
+        proxy_pass http://127.0.0.1:PORT;
+        proxy_set_header Host $host;
+        expires 7d;
+        add_header Cache-Control "public, immutable";
+    }
+
+    listen 443 ssl;
+    ssl_certificate /etc/letsencrypt/live/APP.satszone.link/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/APP.satszone.link/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+}
+server {
+    if ($host = APP.satszone.link) { return 301 https://$host$request_uri; }
+    listen 80; server_name APP.satszone.link; return 404;
+}
+```
+
 ## Step 7: Test and Reload
 
 ```bash
@@ -337,29 +419,81 @@ curl -s --max-time 8 "https://APP.satszone.link" | grep -c "Access Required"
 # Should return > 0
 
 # Check all apps at once
-for name in dataanalyzer data-guardian semantic-modeler satshub sentinel-ai ai-guardian agentfier agent-control agentsubstrate agentkraft cip prediction archsmith cloud-deployer policyguard cortex legal messenger sats-recruitment; do
+for name in dataanalyzer data-guardian semantic-modeler satshub sentinel-ai ai-guardian agentfier agent-control agentsubstrate agentkraft cip prediction archsmith cloud-deployer policyguard cortex legal messenger sats-recruitment agentsubstrate-gcp; do
   has_gate=$(curl -s --max-time 8 "https://$name.satszone.link" | grep -c 'Access Required' 2>/dev/null)
   [ "$has_gate" -gt 0 ] && echo "OK   $name" || echo "MISS $name"
 done
 ```
 
-## New App Checklist
+## GCP Deployment Checklist
+
+When deploying a new app to GCP (or any non-EC2 host), follow these EXTRA steps on top of the standard gate deployment:
+
+### 1. Add subdomain to API Gateway CORS AllowOrigins
+
+The Room Key Lambda API (API Gateway `dr9yrgyzg2`) has an explicit CORS AllowOrigins list.
+**If the new subdomain is not in this list, the browser gate.js/gate-auth.html will get "Connection error"** because the CORS preflight fails.
+
+```bash
+# Get current origins
+aws apigatewayv2 get-api --api-id dr9yrgyzg2 --query "CorsConfiguration.AllowOrigins" --output json
+
+# Add the new origin — include ALL existing origins plus the new one
+aws apigatewayv2 update-api --api-id dr9yrgyzg2 --cors-configuration '{
+  "AllowHeaders": ["content-type", "x-admin-key"],
+  "AllowMethods": ["*"],
+  "AllowOrigins": [
+    ... existing origins ...,
+    "https://NEWAPP.satszone.link"
+  ],
+  "MaxAge": 3600
+}'
+```
+
+### 2. Use Nginx Pattern E (not Pattern B)
+
+Pattern E includes three critical fixes for non-EC2 hosts:
+- **`sub_filter`**: Strips `gate.js` URL → prevents duplicate client-side gate overlay
+- **`Accept-Encoding ""`**: Disables gzip so `sub_filter` can pattern-match the HTML
+- **`Cache-Control: no-store`**: Prevents browser from caching gate HTML and showing stale 304 after auth passes
+
+### 3. Add swap on GCP e2-micro
+
+```bash
+sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
+sudo mkswap /swapfile && sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+```
+
+### 4. Reserve a static IP
+
+GCP ephemeral IPs change on reboot. Reserve a static IP:
+```bash
+gcloud compute addresses create APP-ip --region=REGION
+```
+
+## New App Checklist (Any Cloud)
 
 When adding a new app:
 
-1. **DNS**: Create A record in Route53 (zone Z047244933J6LNZKU0UTJ) pointing to the correct EC2 IP
-2. **SSL**: `sudo certbot certonly --nginx -d NEWAPP.satszone.link --non-interactive --agree-tos --email admin@satszone.link`
-3. **Nginx config**: Add server block using the appropriate pattern (A/B/C/D)
-4. **Test**: `sudo nginx -t && sudo systemctl reload nginx`
-5. **Verify**: `curl -s "https://NEWAPP.satszone.link" | grep -c "Access Required"`
+1. **DNS**: Create A record in Route53 (zone Z047244933J6LNZKU0UTJ) pointing to the instance IP
+2. **CORS**: Add `https://NEWAPP.satszone.link` to API Gateway CORS AllowOrigins (API ID: `dr9yrgyzg2`)
+3. **SSL**: `sudo certbot --nginx -d NEWAPP.satszone.link --non-interactive --agree-tos -m admin@satszone.link`
+4. **Nginx config**: Use Pattern A-D (EC2) or **Pattern E** (GCP/non-EC2)
+5. **Test**: `sudo nginx -t && sudo systemctl reload nginx`
+6. **Verify**: `curl -s "https://NEWAPP.satszone.link" | grep -c "Access Required"`
 
 ## Gotchas
 
 1. **www-data permissions**: Gate HTML in `/home/ubuntu/` returns 404. MUST be in `/var/www/gate/` with www-data ownership.
 2. **error_page placement**: For `proxy_pass` locations → server level. For `try_files` locations → can be in location block.
 3. **No duplicate directives**: `auth_request` and `error_page` go in server blocks only, NOT in the snippet.
-4. **DNS verification**: Always `dig +short APP.satszone.link` and compare with `aws ec2 describe-instances`.
+4. **DNS verification**: Always `dig +short APP.satszone.link` and compare with actual instance IP.
 5. **SSL certs needed before HTTPS**: Run certbot AFTER DNS points to the right IP.
 6. **/api/ routes stay unprotected**: Intentional — SPA backends need to work after cookie unlock.
 7. **Auth server must be running**: `sudo systemctl status gate-auth` — it caches valid keys for 5 min.
 8. **Cookie domain**: The `sz_room_key` cookie is per-subdomain. Unlocking one app doesn't unlock others.
+9. **CORS on non-EC2 (GCP etc.)**: New subdomains MUST be added to API Gateway CORS AllowOrigins or gate.js/gate-auth.html will show "Connection error" / "Network error".
+10. **Browser caching on non-EC2**: Use `Cache-Control: no-store` (Pattern E) to prevent 304 stale responses after auth state changes.
+11. **Duplicate gate overlay on non-EC2**: Apps embed `gate.js` (client-side dark-themed gate) which conflicts with Nginx gate. Use `sub_filter` (Pattern E) to strip it. Without `Accept-Encoding ""`, sub_filter won't work on gzipped responses.
+12. **GCP zone exhaustion**: `e2-micro` free tier is often exhausted in popular zones. Try multiple zones: `us-east1-b`, `us-east1-c`, `us-east1-d`.
